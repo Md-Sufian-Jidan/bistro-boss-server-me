@@ -44,14 +44,43 @@ async function run() {
 
             // insert email if user doesn't exist:
             // you can do this many ways (1. email unique, 2. upsert, 3. simple checking)
-            const query = { email: user.email };
+            const query = { email: user?.email };
             const existInUsers = await usersCollection.findOne(query);
             if (existInUsers) {
                 return res.send({ message: 'user already exist' });
             }
             const result = await usersCollection.insertOne(user);
             res.send(result);
-        })
+        });
+
+        // get all users from db
+        app.get('/users', async (req, res) => {
+            const result = await usersCollection.find().toArray();
+            res.send(result);
+        });
+
+        // transform a normal user into  admin api 
+        app.patch('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            // update a normal user into admin
+            const updatedDoc = {
+                $set: {
+                    role: 'admin'
+                },
+            };
+            const result = await usersCollection.updateOne(query, updatedDoc);
+            res.send(result);
+        });
+
+        // delete a user from db
+        app.delete('/users/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await usersCollection.deleteOne(query);
+            res.send(result);
+        });
+
         // menu api
         app.get('/menu', async (req, res) => {
             const result = await menuCollection.find().toArray();
@@ -65,11 +94,11 @@ async function run() {
         // get all the cart data
         app.get('/carts', async (req, res) => {
             const email = req?.query?.email;
-            let query = {};
-            if (query) {
-                query = { email: email };
-            }
-            const result = await cartCollection.find(query).toArray();
+            // let query = {};
+            // if (query) {
+            //     query = { email: email };
+            // }
+            const result = await cartCollection.find().toArray();
             res.send(result);
         });
 
