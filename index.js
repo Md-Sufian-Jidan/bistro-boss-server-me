@@ -22,6 +22,23 @@ const client = new MongoClient(uri, {
     }
 });
 
+// middlewares
+// verify token
+const verifyToken = (req, res, next) => {
+    console.log('inside verify token', req.headers);
+    if (!req.headers.authorization) {
+        return res.status(401).send({ message: 'unauthorized access' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).send({ message: 'unauthorized access' })
+        }
+        req.decoded = decoded
+        next();
+    });
+};
+
 async function run() {
     try {
         const menuCollection = client.db("restaurantBistro").collection('bistroMenu')
@@ -54,7 +71,7 @@ async function run() {
         });
 
         // get all users from db
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyToken, async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result);
         });
@@ -86,6 +103,15 @@ async function run() {
             const result = await menuCollection.find().toArray();
             res.send(result);
         });
+
+        // delete a menu by id
+        app.delete('/menu/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await menuCollection.deleteOne(query);
+            res.send(result);
+        });
+
         // reviews api 
         app.get('/reviews', async (req, res) => {
             const result = await reviewsCollection.find().toArray();
