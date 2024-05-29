@@ -138,6 +138,21 @@ async function run() {
             res.send(result);
         });
 
+        //update a menu
+        app.put('/update/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const menu = req.body;
+            const updatedDoc = {
+                $set: {
+                    ...menu
+                },
+            };
+            const options = { upsert: true };
+            const result = await menuCollection.updateOne(query, updatedDoc, options);
+            res.send(result);
+        });
+
         // delete a menu by id
         app.delete('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
