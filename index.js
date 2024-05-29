@@ -25,7 +25,7 @@ const client = new MongoClient(uri, {
 // middlewares
 // verify token
 const verifyToken = (req, res, next) => {
-    console.log('inside verify token', req.headers);
+    console.log('inside verify token', req.headers.authorization);
     if (!req.headers.authorization) {
         return res.status(401).send({ message: 'unauthorized access' });
     }
@@ -48,6 +48,19 @@ async function run() {
 
         // Connect the client to the server	(optional starting in v4.7)
         await client.connect();
+
+        // middleware  checking verifyAdmin
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email }
+            const user = await usersCollection.findOne(query);
+            const isAdmin = user?.role === 'admin'
+            if (!isAdmin) {
+                res.status(403).send({ message: 'forbidden access' });
+            }
+            next();
+        };
+
         // creating jwt token
         app.post('/jwt', async (req, res) => {
             const user = req.body;
@@ -55,10 +68,9 @@ async function run() {
             res.send({ token });
         });
 
-        // save a user in db
+        // save a user in db remember do not use verifyToken, verifyAdmin,  in post user api
         app.post('/users', async (req, res) => {
             const user = req.body;
-
             // insert email if user doesn't exist:
             // you can do this many ways (1. email unique, 2. upsert, 3. simple checking)
             const query = { email: user?.email };
@@ -71,13 +83,28 @@ async function run() {
         });
 
         // get all users from db
-        app.get('/users', verifyToken, async (req, res) => {
+        app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result);
         });
 
+        // check the user is a user is admin or not
+        app.get('/user/admin/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email };
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            const user = await usersCollection.findOne(query);
+            let isAdmin = false;
+            if (user) {
+                isAdmin = user?.role === 'admin';
+            }
+            res.send({ isAdmin });
+        });
+
         // transform a normal user into  admin api 
-        app.patch('/users/admin/:id', async (req, res) => {
+        app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             // update a normal user into admin
@@ -91,7 +118,7 @@ async function run() {
         });
 
         // delete a user from db
-        app.delete('/users/:id', async (req, res) => {
+        app.delete('/users/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await usersCollection.deleteOne(query);
@@ -104,8 +131,15 @@ async function run() {
             res.send(result);
         });
 
+        // create a menu api 
+        app.post('/menu', verifyToken, verifyAdmin, async (req, res) => {
+            const menu = req.body;
+            const result = await menuCollection.insertOne(menu);
+            res.send(result);
+        });
+
         // delete a menu by id
-        app.delete('/menu/:id', async (req, res) => {
+        app.delete('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await menuCollection.deleteOne(query);
@@ -118,18 +152,18 @@ async function run() {
             res.send(result);
         });
         // get all the cart data
-        app.get('/carts', async (req, res) => {
+        app.get('/carts', verifyToken, async (req, res) => {
             const email = req?.query?.email;
-            // let query = {};
-            // if (query) {
-            //     query = { email: email };
-            // }
-            const result = await cartCollection.find().toArray();
+            let query = {}
+            if (email) {
+                query = { email: email };
+            }
+            const result = await cartCollection.find(query).toArray();
             res.send(result);
         });
 
         // save a cart in db
-        app.post('/carts', async (req, res) => {
+        app.post('/carts', verifyToken, async (req, res) => {
             const cardItem = req.body;
             console.log(cardItem);
             const result = await cartCollection.insertOne(cardItem);
@@ -137,7 +171,7 @@ async function run() {
         });
 
         // delete a cart
-        app.delete('/carts/:id', async (req, res) => {
+        app.delete('/carts/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await cartCollection.deleteOne(query);
