@@ -4,6 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const app = express();
+const stripe = require('stripe')(process.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 8000;
 
 //middlewares
@@ -34,7 +35,7 @@ const verifyToken = (req, res, next) => {
         if (err) {
             return res.status(401).send({ message: 'unauthorized access' })
         }
-        req.decoded = decoded
+        req.decoded = decoded;
         next();
     });
 };
@@ -138,6 +139,8 @@ async function run() {
             res.send(result);
         });
 
+
+
         //update a menu
         app.put('/update/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
@@ -152,6 +155,8 @@ async function run() {
             const result = await menuCollection.updateOne(query, updatedDoc, options);
             res.send(result);
         });
+
+
 
         // delete a menu by id
         app.delete('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
@@ -192,6 +197,21 @@ async function run() {
             const result = await cartCollection.deleteOne(query);
             res.send(result);
         });
+
+        //payment intent 
+        app.post('/create-payment-intent', async (req, res) => {
+            const { price } = req.body;
+            const amount = parseFloat(price * 100);
+            // paymentIntens
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
+        })
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
